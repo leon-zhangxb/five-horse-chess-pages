@@ -4,4 +4,6 @@
 
 技术支持 URL：  https://leon-zhangxb.github.io/five-horse-chess-pages/support/
 
-营销页（可选）：https://leon-zhangxb.github.io/five-horse-chess-pages/marketing/
+营销页（可选）： https://leon-zhangxb.github.io/five-horse-chess-pages/marketing/
+
+网页版游戏URL： https://leon-zhangxb.github.io/five-horse-chess-pages/game/

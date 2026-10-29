@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>五马棋 · 在线试玩</title>
+<style>
+  :root {
+    --paper: #F6EDDC;
+    --paper-deep: #EFE2C6;
+    --ink: #3A2410;
+    --wood: #7C4C24;
+    --wood-dark: #4A2A12;
+    --gold: #C9A24B;
+    --gold-bright: #E8B33C;
+    --red: #B0402E;
+    --blue: #33608F;
+    --ok: #4A8C4A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #EFE3C8 0%, var(--paper) 100%);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 0 14px 30px; }
+  header { text-align: center; padding: 20px 0 6px; }
+  header h1 {
+    font-family: "Songti SC", "STSong", serif;
+    font-size: 30px; font-weight: 700; letter-spacing: 6px;
+    color: var(--wood-dark);
+  }
+  header .sub { font-size: 12px; color: #8A6A3A; margin-top: 4px; letter-spacing: 2px; }
+
+  /* ---------- 模式选择 ---------- */
+  .mode-list { margin-top: 22px; display: grid; gap: 14px; }
+  .mode-card {
+    background: #FFFDF6;
+    border: 2px solid var(--wood);
+    border-radius: 14px;
+    padding: 16px 18px;
+    cursor: pointer;
+    box-shadow: 0 2px 0 var(--wood-dark);
+    transition: transform .12s, box-shadow .12s;
+  }
+  .mode-card:active { transform: translateY(2px); box-shadow: 0 0 0 var(--wood-dark); }
+  .mode-card .t { font-size: 18px; font-weight: 700; color: var(--wood-dark); }
+  .mode-card .d { font-size: 13px; color: #7A5A30; margin-top: 6px; line-height: 1.6; }
+  .mode-card .go { font-size: 12px; color: var(--red); margin-top: 8px; font-weight: 600; }
+
+  /* ---------- 游戏页 ---------- */
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+  .toolbar .mode-name { font-size: 14px; font-weight: 700; color: var(--wood-dark); }
+  .btn {
+    border: 1.5px solid var(--wood); background: #FFFDF6; color: var(--wood-dark);
+    font-size: 13px; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  }
+  .status {
+    margin-top: 10px; min-height: 40px;
+    background: #FFFDF6; border: 1.5px solid var(--gold);
+    border-radius: 10px; padding: 8px 12px;
+    font-size: 14px; line-height: 1.5; text-align: center;
+  }
+  .status .turn { font-weight: 700; }
+  .status .hint { color: var(--red); }
+  svg.board { width: 100%; height: auto; display: block; margin-top: 6px; touch-action: manipulation; }
+  .reserves { display: flex; justify-content: space-around; margin-top: 8px; font-size: 13px; }
+  .reserves .side { display: flex; align-items: center; gap: 6px; background:#FFFDF6; border:1.5px solid var(--gold); border-radius:999px; padding:4px 12px; }
+  .reserve-dots { display: inline-flex; gap: 3px; }
+
+  /* ---------- 胜负弹层 ---------- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(58,36,16,.55);
+    display: none; align-items: center; justify-content: center; z-index: 10;
+  }
+  .overlay.show { display: flex; }
+  .panel {
+    background: var(--paper); border: 3px solid var(--wood); border-radius: 18px;
+    padding: 28px 30px; text-align: center; max-width: 320px; width: 86%;
+    box-shadow: 0 6px 0 rgba(58,36,16,.35);
+  }
+  .panel .big { font-family: "Songti SC", "STSong", serif; font-size: 26px; font-weight: 700; }
+  .panel .big.win { color: var(--red); }
+  .panel .big.lose { color: #5E6B78; }
+  .panel .big.draw { color: var(--gold); }
+  .panel .txt { font-size: 14px; margin-top: 10px; line-height: 1.7; }
+  .panel .ops { margin-top: 18px; display: flex; gap: 10px; justify-content: center; }
+  .panel .btn { font-size: 14px; padding: 8px 18px; }
+  .panel .btn.primary { background: var(--wood); color: #FFFDF6; }
+
+  /* ---------- 玩法说明 ---------- */
+  details.help { margin-top: 18px; font-size: 13px; color: #7A5A30; }
+  details.help summary { cursor: pointer; font-weight: 700; color: var(--wood-dark); }
+  details.help p { margin-top: 8px; line-height: 1.8; }
+  footer { text-align: center; font-size: 12px; color: #A08A60; margin-top: 20px; }
+  footer a { color: var(--red); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>五马棋</h1>
+    <div class="sub">仡佬族非遗 · 与 AI 对弈</div>
+  </header>
+
+  <!-- 模式选择 -->
+  <div id="pick" class="mode-list">
+    <div class="mode-card" onclick="startGame('m17')">
+      <div class="t">17子 · AI 大将</div>
+      <div class="d">你执 10 颗士兵，围剿庙中的 AI 主将。<br>
+        士兵只能沿线滑行，不能吃主将；把主将困死、或困在庙中即胜。<br>
+        注意：士兵剩太少、或 20 手内围不住主将，判负。</div>
+      <div class="go">士兵先手？不——主将先出庙，你要提前布防 →</div>
+    </div>
+    <div class="mode-card" onclick="startGame('m18')">
+      <div class="t">18子 · 人机对弈</div>
+      <div class="d">你执红方，AI 执蓝方，各 9 颗（上场 5 + 备用 4）。<br>
+        沿线滑行，用「夹」（己—敌—己）和「挑」（敌—己—敌）吃子。<br>
+        被吃的一方从备用补回；吃光或围困对方即胜，双方各剩一子判和。</div>
+      <div class="go">你执红先行 →</div>
+    </div>
+  </div>
+
+  <!-- 游戏页 -->
+  <div id="play" style="display:none">
+    <div class="toolbar">
+      <div class="mode-name" id="modeName"></div>
+      <div>
+        <button class="btn" onclick="restart()">重开</button>
+        <button class="btn" onclick="backToPick()">换模式</button>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+    <svg id="board" class="board" viewBox="0 0 400 590"></svg>
+    <div class="reserves" id="reserves" style="display:none">
+      <div class="side">🔴 红方备用 <span class="reserve-dots" id="resRed"></span></div>
+      <div class="side">🔵 蓝方备用 <span class="reserve-dots" id="resBlue"></span></div>
+    </div>
+  </div>
+
+  <!-- 胜负弹层 -->
+  <div class="overlay" id="overlay">
+    <div class="panel">
+      <div class="big" id="ovTitle"></div>
+      <div class="txt" id="ovText"></div>
+      <div class="ops">
+        <button class="btn primary" onclick="restart()">再来一局</button>
+        <button class="btn" onclick="backToPick()">返回选择</button>
+      </div>
+    </div>
+  </div>
+
+  <details class="help">
+    <summary>玩法说明</summary>
+    <p><b>棋盘</b>：5×5 主体 + 上方菱形「庙」（庙内四点：尚·登基点、和、中、庙）。棋子沿<b>线</b>滑行：同一条线上、中间没有棋子，走多远都行。</p>
+    <p><b>17子 · AI大将</b>：AI 主将从庙中心出发（先手），你执 10 颗士兵围剿。士兵不能吃主将、不能落在庙门（0,2），但可以滑过它。把主将困死即胜；士兵被吃剩 ≤2、全部被堵、或连续 20 手没能压缩主将的活动空间，判负。</p>
+    <p><b>18子 · 人机对弈</b>：红蓝各 9 颗（左/右列上场 5 颗 + 备用 4 颗），庙只作装饰不可进入。吃子靠「<b>夹</b>」（己—敌—己 三子共线）与「<b>挑</b>」（敌—己—敌 三子共线），一次可吃多颗；被吃的一方从备用补到起始列，备用耗尽才是真损失。吃光或围困对方即胜；双方各剩一子判和。</p>
+  </details>
+
+  <footer>仡佬族五马棋 · 非遗数字化 · <a href="../marketing/">了解更多</a></footer>
+</div>
+
+<script src="engine.js"></script>
+<script>
+var E = window.FiveHorseEngine;
+var game = null;
+var aiTimer = null;
+
+// ---------- 坐标映射：格距 80，棋盘原点 (40,220) ----------
+function xy(p) { return { x: 40 + p.c * 80, y: 220 + p.r * 80 }; }
+
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs) {
+  var n = document.createElementNS(NS, tag);
+  for (var k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+}
+
+var PIECE_GLYPH = { red: '🔴', blue: '🔵', main: '👑', soldier: '⚔️' };
+var MODE_NAME = { m17: '17子 · AI大将', m18: '18子 · 人机对弈' };
+
+function startGame(mode) {
+  game = new E.Game(mode);
+  document.getElementById('pick').style.display = 'none';
+  document.getElementById('play').style.display = 'block';
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('modeName').textContent = MODE_NAME[mode];
+  document.getElementById('reserves').style.display = mode === 'm18' ? 'flex' : 'none';
+  buildBoard();
+  render();
+  // AI 先手（17子模式主将先出庙）
+  maybeAI();
+}
+
+function restart() {
+  if (!game) return;
+  var mode = game.mode;
+  game = new E.Game(mode);
+  document.getElementById('overlay').classList.remove('show');
+  buildBoard();
+  render();
+  maybeAI();
+}
+
+function backToPick() {
+  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
+  game = null;
+  document.getElementById('pick').style.display = 'grid';
+  document.getElementById('play').style.display = 'none';
+  document.getElementById('overlay').classList.remove('show');
+}
+
+// ---------- 棋盘绘制（静态线层 + 热区；棋子/高亮动态重绘） ----------
+function buildBoard() {
+  var svg = document.getElementById('board');
+  svg.innerHTML = '';
+  var mode17 = game.mode17;
+
+  function line(x1, y1, x2, y2) {
+    svg.appendChild(el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+      stroke: '#8A6A3A', 'stroke-width': 3, 'stroke-linecap': 'round' }));
+  }
+
+  // 5 条横线
+  for (var r = 0; r < 5; r++) {
+    var y = 220 + r * 80;
+    line(40, y, 360, y);
+  }
+  // 5 条竖线（col 2 在 17 模式贯通庙）
+  for (var c = 0; c < 5; c++) {
+    var x = 40 + c * 80;
+    if (c === 2) { line(200, mode17 ? 60 : 220, 200, 540); }
+    else { line(x, 220, x, 540); }
+  }
+  // 6 条长线
+  line(40, 220, 360, 540);            // 主对角
+  line(40, 540, 360, 220);            // 副对角
+  if (mode17) { line(280, 140, 40, 380); line(120, 140, 360, 380); } // 庙右/庙左—庙门—棋盘
+  else { line(200, 220, 40, 380); line(200, 220, 360, 380); }
+  line(40, 380, 200, 540);            // 左中—底中
+  line(360, 380, 200, 540);           // 底中—右中
+  // 庙：菱形上两边 + 内横线（仅 17 模式；下两边已随长线画出）
+  if (mode17) {
+    line(200, 60, 120, 140);
+    line(200, 60, 280, 140);
+    line(120, 140, 280, 140);
+    // 庙字标
+    var glyph = { top: ['尚', 200, 46], left: ['和', 96, 145], right: ['庙', 304, 145] };
+    for (var gk in glyph) {
+      var t = el('text', { x: glyph[gk][1], y: glyph[gk][2], 'text-anchor': 'middle',
+        'font-size': 15, fill: '#B08A50', 'font-family': 'serif' });
+      t.textContent = glyph[gk][0];
+      svg.appendChild(t);
+    }
+  }
+  // 动态层（棋子/高亮在棋盘线之上）
+  svg.appendChild(el('g', { id: 'marks' }));
+  svg.appendChild(el('g', { id: 'pieces' }));
+  // 棋位热区（最上层：否则棋子元素会拦截点击，导致无法选中）
+  var hits = el('g', { id: 'hits' });
+  var spots = [];
+  for (var rr = 0; rr < 5; rr++) for (var cc = 0; cc < 5; cc++) spots.push({ r: rr, c: cc });
+  if (mode17) spots = spots.concat(E.TEMPLE_POINTS);
+  spots.forEach(function (p) {
+    var w = xy(p);
+    var hit = el('circle', { cx: w.x, cy: w.y, r: 30, fill: 'transparent', 'pointer-events': 'all', style: 'cursor:pointer' });
+    hit.addEventListener('click', function () { onCellClick(p); });
+    hits.appendChild(hit);
+  });
+  svg.appendChild(hits);
+}
+
+function onCellClick(p) {
+  if (!game || game.gameOver || aiTimer) return;
+  var needAI = game.playerClick(p);
+  render();
+  if (needAI) maybeAI();
+}
+
+function maybeAI() {
+  if (!game || game.gameOver) return;
+  if (game.currentPlayer !== game.aiPlayer()) return;
+  aiTimer = setTimeout(function () {
+    aiTimer = null;
+    game.aiTurn();
+    render();
+    if (game.gameOver) showResult();
+  }, 500);
+}
+
+// ---------- 动态渲染 ----------
+function render() {
+  var svg = document.getElementById('board');
+  var marks = svg.querySelector('#marks');
+  var pieces = svg.querySelector('#pieces');
+  if (!marks || !pieces) return;
+  marks.innerHTML = '';
+  pieces.innerHTML = '';
+
+  // 最后一步标记
+  if (game.lastMove) {
+    var f = xy(game.lastMove.from), t = xy(game.lastMove.to);
+    marks.appendChild(el('circle', { cx: f.x, cy: f.y, r: 6, fill: 'none', stroke: '#B08A50', 'stroke-width': 2, opacity: .8 }));
+  }
+  // 选中 + 合法步
+  if (game.selected && !game.gameOver) {
+    var s = xy(game.selected);
+    marks.appendChild(el('circle', { cx: s.x, cy: s.y, r: 30, fill: 'none', stroke: '#E8B33C', 'stroke-width': 4 }));
+    var moves = E.legalMoves(game.selected, game.pieceAt.bind(game), game.mode17);
+    moves.forEach(function (m) {
+      var w = xy(m);
+      marks.appendChild(el('circle', { cx: w.x, cy: w.y, r: 11, fill: 'rgba(74,140,74,.55)' }));
+    });
+  }
+  // 棋子
+  function piece(player, p) {
+    var w = xy(p);
+    var isMain = player === 'main';
+    var g = el('g', {});
+    g.appendChild(el('circle', { cx: w.x, cy: w.y, r: isMain ? 30 : 25,
+      fill: '#FFFDF6', stroke: player === 'red' ? '#B0402E' : player === 'blue' ? '#33608F' : '#4A2A12',
+      'stroke-width': 3 }));
+    var t = el('text', { x: w.x, y: w.y + (isMain ? 12 : 10), 'text-anchor': 'middle', 'font-size': isMain ? 30 : 26 });
+    t.textContent = PIECE_GLYPH[player];
+    g.appendChild(t);
+    pieces.appendChild(g);
+  }
+  for (var r = 0; r < 5; r++) {
+    for (var c = 0; c < 5; c++) {
+      var pc = game.board[r][c];
+      if (pc) piece(pc, { r: r, c: c });
+    }
+  }
+  var tk = ['top', 'left', 'center', 'right'];
+  for (var i = 0; i < tk.length; i++) {
+    if (game.temple[tk[i]]) piece(game.temple[tk[i]], E.TEMPLE[tk[i]]);
+  }
+
+  // 状态栏
+  var st = document.getElementById('status');
+  var turnName = { main: 'AI 主将', soldier: '你（士兵）', red: '你（红方）', blue: 'AI 蓝方' };
+  if (game.gameOver) {
+    st.innerHTML = '<span class="turn">' + (game.result.winner === 'player' ? '🎉 你赢了' : game.result.winner === 'ai' ? 'AI 获胜' : '和棋') + '</span>';
+  } else if (aiTimer) {
+    st.innerHTML = '<span class="hint">AI 思考中…</span>';
+  } else {
+    st.innerHTML = '<span class="turn">' + turnName[game.currentPlayer] + ' 行棋</span><br>' + (game.message || '');
+  }
+  // 备用量（18 模式）
+  if (game.mode === 'm18') {
+    document.getElementById('resRed').textContent = '●'.repeat(game.redReserves) + '○'.repeat(4 - game.redReserves);
+    document.getElementById('resBlue').textContent = '●'.repeat(game.blueReserves) + '○'.repeat(4 - game.blueReserves);
+  }
+  // 胜负弹层
+  if (game.gameOver) showResult();
+}
+
+function showResult() {
+  if (!game || !game.gameOver) return;
+  var ov = document.getElementById('overlay');
+  var title = document.getElementById('ovTitle');
+  var txt = document.getElementById('ovText');
+  if (game.result.winner === 'player') { title.textContent = '🎉 你赢了'; title.className = 'big win'; }
+  else if (game.result.winner === 'ai') { title.textContent = 'AI 获胜'; title.className = 'big lose'; }
+  else { title.textContent = '和棋'; title.className = 'big draw'; }
+  txt.textContent = game.result.text;
+  ov.classList.add('show');
+}
+
+// URL 直链：game/#m17 或 #m18 直接开局（分享/调试用）
+(function () {
+  var h = location.hash.slice(1);
+  if (h === 'm17' || h === 'm18') startGame(h);
+})();
+</script>
+</body>
+</html>

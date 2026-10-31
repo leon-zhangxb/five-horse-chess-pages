@@ -101,17 +101,23 @@
 <div class="wrap">
   <header>
     <h1>五马棋</h1>
-    <div class="sub">仡佬族非遗 · 与 AI 对弈</div>
+    <div class="sub">仡佬族非遗 · 在线对弈</div>
   </header>
 
   <!-- 模式选择 -->
   <div id="pick" class="mode-list">
+    <div class="mode-card" onclick="startGame('m17vs16')">
+      <div class="t">17子 · 大将对士兵 <span style="font-size:11px;color:#B08A50">同屏双人</span></div>
+      <div class="d">同屏双人轮流：一方执 1 颗主将（从庙中突围），一方执 10 颗士兵围剿。<br>
+        规则同 AI 大将模式；主将先手，轮流落子。</div>
+      <div class="go">主将先手 →</div>
+    </div>
     <div class="mode-card" onclick="startGame('m17')">
       <div class="t">17子 · AI 大将</div>
       <div class="d">你执 10 颗士兵，围剿庙中的 AI 主将。<br>
         士兵只能沿线滑行，不能吃主将；把主将困死、或困在庙中即胜。<br>
         注意：士兵剩太少、或 20 手内围不住主将，判负。</div>
-      <div class="go">士兵先手？不——主将先出庙，你要提前布防 →</div>
+      <div class="go">主将先出庙，你要提前布防 →</div>
     </div>
     <div class="mode-card" onclick="startGame('m18')">
       <div class="t">18子 · 人机对弈</div>
@@ -119,6 +125,12 @@
         沿线滑行，用「夹」（己—敌—己）和「挑」（敌—己—敌）吃子。<br>
         被吃的一方从备用补回；吃光或围困对方即胜，双方各剩一子判和。</div>
       <div class="go">你执红先行 →</div>
+    </div>
+    <div class="mode-card" onclick="startGame('m18local')">
+      <div class="t">18子 · 双人对战 <span style="font-size:11px;color:#B08A50">同屏双人</span></div>
+      <div class="d">同屏双人轮流：红方（左列）对蓝方（右列），各 9 颗（上场 5 + 备用 4）。<br>
+        夹 / 挑吃子、备用补回；吃光或围困对方即胜，双方各剩一子判和。</div>
+      <div class="go">红方先行 →</div>
     </div>
   </div>
 
@@ -178,7 +190,28 @@ function el(tag, attrs) {
 }
 
 var PIECE_GLYPH = { red: '🔴', blue: '🔵', main: '👑', soldier: '⚔️' };
-var MODE_NAME = { m17: '17子 · AI大将', m18: '18子 · 人机对弈' };
+var MODE_NAME = {
+  m17: '17子 · AI大将', m17vs16: '17子 · 大将对士兵',
+  m18: '18子 · 人机对弈', m18local: '18子 · 双人对战'
+};
+
+// 回合方显示名（AI 模式带视角；双人对战为绝对方）
+function turnLabel(player) {
+  if (game.mode === 'm17') return player === 'main' ? 'AI 主将' : '你（士兵）';
+  if (game.mode === 'm17vs16') return player === 'main' ? '👑 主将方' : '⚔️ 士兵方';
+  if (game.mode === 'm18') return player === 'red' ? '你（红方）' : 'AI 蓝方';
+  return player === 'red' ? '🔴 红方' : '🔵 蓝方';
+}
+
+// 胜负结果标题（引擎 result.winner 存绝对方，这里按模式翻译）
+function resultTitle() {
+  var w = game.result.winner;
+  if (w === 'draw') return '和棋';
+  var isAI = (game.mode === 'm17' || game.mode === 'm18');
+  if (isAI) return w === game.humanPlayer() ? '🎉 你赢了' : 'AI 获胜';
+  var names = { main: '👑 主将方胜', soldier: '⚔️ 士兵方胜', red: '🔴 红方胜', blue: '🔵 蓝方胜' };
+  return names[w];
+}
 
 function startGame(mode) {
   game = new E.Game(mode);
@@ -186,7 +219,7 @@ function startGame(mode) {
   document.getElementById('play').style.display = 'block';
   document.getElementById('overlay').classList.remove('show');
   document.getElementById('modeName').textContent = MODE_NAME[mode];
-  document.getElementById('reserves').style.display = mode === 'm18' ? 'flex' : 'none';
+  document.getElementById('reserves').style.display = (mode.indexOf('m18') === 0) ? 'flex' : 'none';
   buildBoard();
   render();
   // AI 先手（17子模式主将先出庙）
@@ -339,16 +372,15 @@ function render() {
 
   // 状态栏
   var st = document.getElementById('status');
-  var turnName = { main: 'AI 主将', soldier: '你（士兵）', red: '你（红方）', blue: 'AI 蓝方' };
   if (game.gameOver) {
-    st.innerHTML = '<span class="turn">' + (game.result.winner === 'player' ? '🎉 你赢了' : game.result.winner === 'ai' ? 'AI 获胜' : '和棋') + '</span>';
+    st.innerHTML = '<span class="turn">' + resultTitle() + '</span>';
   } else if (aiTimer) {
     st.innerHTML = '<span class="hint">AI 思考中…</span>';
   } else {
-    st.innerHTML = '<span class="turn">' + turnName[game.currentPlayer] + ' 行棋</span><br>' + (game.message || '');
+    st.innerHTML = '<span class="turn">' + turnLabel(game.currentPlayer) + ' 行棋</span><br>' + (game.message || '');
   }
-  // 备用量（18 模式）
-  if (game.mode === 'm18') {
+  // 备用量（18 子模式）
+  if (game.mode.indexOf('m18') === 0) {
     document.getElementById('resRed').textContent = '●'.repeat(game.redReserves) + '○'.repeat(4 - game.redReserves);
     document.getElementById('resBlue').textContent = '●'.repeat(game.blueReserves) + '○'.repeat(4 - game.blueReserves);
   }
@@ -361,17 +393,22 @@ function showResult() {
   var ov = document.getElementById('overlay');
   var title = document.getElementById('ovTitle');
   var txt = document.getElementById('ovText');
-  if (game.result.winner === 'player') { title.textContent = '🎉 你赢了'; title.className = 'big win'; }
-  else if (game.result.winner === 'ai') { title.textContent = 'AI 获胜'; title.className = 'big lose'; }
-  else { title.textContent = '和棋'; title.className = 'big draw'; }
+  var w = game.result.winner;
+  if (w === 'draw') { title.textContent = '和棋'; title.className = 'big draw'; }
+  else if (game.mode === 'm17' || game.mode === 'm18') {
+    if (w === game.humanPlayer()) { title.textContent = '🎉 你赢了'; title.className = 'big win'; }
+    else { title.textContent = 'AI 获胜'; title.className = 'big lose'; }
+  } else {
+    title.textContent = resultTitle(); title.className = 'big win';
+  }
   txt.textContent = game.result.text;
   ov.classList.add('show');
 }
 
-// URL 直链：game/#m17 或 #m18 直接开局（分享/调试用）
+// URL 直链：game/#m17 / #m17vs16 / #m18 / #m18local 直接开局（分享/调试用）
 (function () {
   var h = location.hash.slice(1);
-  if (h === 'm17' || h === 'm18') startGame(h);
+  if (h === 'm17' || h === 'm17vs16' || h === 'm18' || h === 'm18local') startGame(h);
 })();
 </script>
 </body>

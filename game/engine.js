@@ -290,7 +290,9 @@
 
   function Game(mode) {
     this.mode = mode;
-    this.mode17 = (mode === 'm17');
+    // 17 模式（m17=AI大将 / m17vs16=大将对士兵）庙可用；AI 模式（m17/m18）才有 aiTurn
+    this.mode17 = (mode === 'm17' || mode === 'm17vs16');
+    this.isAI = (mode === 'm17' || mode === 'm18');
     this.reset();
   }
 
@@ -301,7 +303,7 @@
     }
     this.temple = { top: null, left: null, center: null, right: null };
     this.gameOver = false;
-    this.result = null;        // {winner: 'player'|'ai'|'draw', text}
+    this.result = null;        // {winner: 'main'|'soldier'|'red'|'blue'|'draw', text}——绝对方，显示层按模式翻译
     this.selected = null;
     this.lastMove = null;
     this.mainInTemple = this.mode17;
@@ -332,7 +334,11 @@
   };
 
   Game.prototype.humanPlayer = function () { return this.mode17 ? 'soldier' : 'red'; };
-  Game.prototype.aiPlayer = function () { return this.mode17 ? 'main' : 'blue'; };
+  // AI 模式返回 AI 执子的方；双人对战返回 null（无 AI，双方轮流操作）
+  Game.prototype.aiPlayer = function () {
+    if (!this.isAI) return null;
+    return this.mode17 ? 'main' : 'blue';
+  };
 
   Game.prototype.pieceAt = function (p) {
     if (isOnBoard(p)) return this.board[p.r][p.c];
@@ -402,7 +408,7 @@
     // 主将胜：士兵被吃光或兵力不足以围剿
     if (this.countOf('soldier') <= SOLDIER_LOSE_THRESHOLD) {
       this.gameOver = true;
-      this.result = { winner: 'ai', text: '主将胜：士兵已被吃光，兵力不足以完成围剿。' };
+      this.result = { winner: 'main', text: '主将胜：士兵已被吃光，兵力不足以完成围剿。' };
       return true;
     }
     // 士兵胜：主将困在庙中无法移动
@@ -410,26 +416,26 @@
       var mp = this.mainPosition();
       if (mp && !hasAnyLegalMove(mp, this.pieceAt.bind(this), true)) {
         this.gameOver = true;
-        this.result = { winner: 'player', text: '士兵胜：主将被困在庙中，无法移动！' };
+        this.result = { winner: 'soldier', text: '士兵胜：主将被困在庙中，无法移动！' };
         return true;
       }
     }
     // 士兵胜：主将已出庙，但棋盘上所有主将棋子无路可走
     if (!this.mainInTemple && allBlocked('main', this.pieceAt.bind(this), true)) {
       this.gameOver = true;
-      this.result = { winner: 'player', text: '士兵胜：主将已被围困，无路可走！' };
+      this.result = { winner: 'soldier', text: '士兵胜：主将已被围困，无路可走！' };
       return true;
     }
     // 主将胜：所有士兵无路可走
     if (allBlocked('soldier', this.pieceAt.bind(this), true)) {
       this.gameOver = true;
-      this.result = { winner: 'ai', text: '主将胜：士兵全部被堵死。' };
+      this.result = { winner: 'main', text: '主将胜：士兵全部被堵死。' };
       return true;
     }
     // 主将胜：士兵长时间消极不应战
     if (this.passiveCounter >= SOLDIER_PASSIVE_LIMIT) {
       this.gameOver = true;
-      this.result = { winner: 'ai', text: '主将胜：士兵连续 ' + SOLDIER_PASSIVE_LIMIT + ' 手消极不应战。' };
+      this.result = { winner: 'main', text: '主将胜：士兵连续 ' + SOLDIER_PASSIVE_LIMIT + ' 手消极不应战。' };
       return true;
     }
     return false;
@@ -452,16 +458,16 @@
     if (loserCount === 0) {
       this.gameOver = true;
       this.result = mover === 'red'
-        ? { winner: 'player', text: '红方胜：蓝方九子全灭！' }
-        : { winner: 'ai', text: '蓝方胜：红方九子全灭。' };
+        ? { winner: 'red', text: '红方胜：蓝方九子全灭！' }
+        : { winner: 'blue', text: '蓝方胜：红方九子全灭。' };
       return true;
     }
     // 围困：对手全部无路可走
     if (allBlocked(loser, this.pieceAt.bind(this), false)) {
       this.gameOver = true;
       this.result = mover === 'red'
-        ? { winner: 'player', text: '红方胜：蓝方被围困，无路可走！' }
-        : { winner: 'ai', text: '蓝方胜：红方被围困，无路可走。' };
+        ? { winner: 'red', text: '红方胜：蓝方被围困，无路可走！' }
+        : { winner: 'blue', text: '蓝方胜：红方被围困，无路可走。' };
       return true;
     }
     return false;
@@ -491,55 +497,74 @@
     for (var i = 0; i < captured.length; i++) this.setPiece(null, captured[i]);
   };
 
-  // 玩家点击入口（返回是否触发 AI 回合；选中/走子/取消都返回 false）
+  // 落子点击入口（AI 模式 = 玩家操作，返回是否触发 AI 回合；
+  // 双人对战 = 同屏双方轮流操作，恒返回 false）
   Game.prototype.playerClick = function (pos) {
     if (this.gameOver) return false;
-    var human = this.humanPlayer();
-    if (this.currentPlayer !== human) return false;
+    // AI 模式：当前回合必须是玩家；双人对战：当前回合的人直接操作
+    var actor = this.isAI ? this.humanPlayer() : this.currentPlayer;
+    if (this.currentPlayer !== actor) return false;
 
     var mode17 = this.mode17;
+    var pieceAt = this.pieceAt.bind(this);
+    var sideName = { main: '主将方', soldier: '士兵方', red: '红方', blue: '蓝方' };
 
     if (this.selected) {
       var from = this.selected;
       if (same(from, pos)) { this.selected = null; this.message = '已取消选中。'; return false; }
-      if (this.pieceAt(from) !== human) { this.selected = null; return false; }
-      if (this.pieceAt(pos)) { this.message = '该位置已有棋子。'; this.selected = null; return false; }
-      if (!canMove(from, pos, this.pieceAt.bind(this), mode17)) {
+      if (pieceAt(from) !== actor) { this.selected = null; return false; }
+      if (pieceAt(pos)) { this.message = '该位置已有棋子。'; this.selected = null; return false; }
+      if (!canMove(from, pos, pieceAt, mode17)) {
         this.message = '走不到这里：只能在连线上滑行，且中间不能有棋子。';
         this.selected = null;
         return false;
       }
-      this.setPiece(human, pos);
+      this.setPiece(actor, pos);
       this.setPiece(null, from);
       this.selected = null;
       this.lastMove = { from: from, to: pos };
 
       if (mode17) {
-        // 士兵不能吃主将（checkCaptures 返回空），无吃子结算
-        var hint = this.updateSoldierPassivity();
-        if (this.checkWin17()) return false;
-        this.currentPlayer = 'main';
-        this.message = '轮到 AI 主将' + hint;
-        return true;
+        // 主将走到棋盘 → 出庙（与 iOS 一致：出庙后走「全堵」分支，不再回「困庙」判定）
+        if (actor === 'main' && this.mainInTemple && isOnBoard(pos)) this.mainInTemple = false;
+        // 主将可吃士兵；士兵不能吃主将（checkCaptures 对 soldier 恒返回空）
+        var captured = checkCaptures(pos, actor, pieceAt, true);
+        if (captured.length) {
+          this.applyCaptures17(captured);
+          this.resetSoldierPassivity();
+          this.message = sideName[actor] + '吃掉 ' + captured.length + ' 颗棋子！';
+        }
+        if (actor === 'soldier') {
+          var hint = this.updateSoldierPassivity();
+          if (this.checkWin17()) return false;
+          this.currentPlayer = 'main';
+          this.message = this.isAI ? '轮到 AI 主将' + hint : '轮到主将方' + hint;
+          return this.isAI;
+        } else {
+          if (this.checkWin17()) return false;
+          this.currentPlayer = 'soldier';
+          this.message = this.isAI ? '轮到你走士兵。' : '轮到士兵方。';
+          return false;
+        }
       } else {
-        var captured = checkCaptures(pos, human, this.pieceAt.bind(this), false);
-        if (captured.length) this.applyCaptures18(captured, human);
-        this.message = captured.length
-          ? '吃掉 ' + captured.length + ' 颗蓝子！'
-          : '轮到 AI 蓝方。';
-        if (this.checkWin18(human)) return false;
-        this.currentPlayer = 'blue';
-        return true;
+        var captured18 = checkCaptures(pos, actor, pieceAt, false);
+        if (captured18.length) this.applyCaptures18(captured18, actor);
+        if (this.checkWin18(actor)) return false;
+        this.currentPlayer = OPP[actor];
+        this.message = captured18.length
+          ? sideName[actor] + '吃掉 ' + captured18.length + ' 颗棋子！'
+          : '轮到' + sideName[this.currentPlayer] + '。';
+        return this.isAI;
       }
     }
 
-    // 无选中：尝试选中己方棋子
-    if (this.pieceAt(pos) === human) {
+    // 无选中：尝试选中当前回合方的棋子
+    if (pieceAt(pos) === actor) {
       this.selected = pos;
-      this.message = mode17 ? '已选中士兵：沿线滑行到高亮点。'
-                            : '已选中红子：沿线滑行到高亮点。';
+      var selName = { main: '主将', soldier: '士兵', red: '红子', blue: '蓝子' };
+      this.message = '已选中' + selName[actor] + '：沿线滑行到高亮点。';
     } else {
-      this.message = mode17 ? '请选择你的士兵。' : '请选择你的红子。';
+      this.message = '轮到' + sideName[actor] + '：请选择自己的棋子。';
     }
     return false;
   };
@@ -556,9 +581,9 @@
     if (!move) {
       this.gameOver = true;
       if (mode17) {
-        this.result = { winner: 'player', text: '士兵胜：AI 主将无路可走！' };
+        this.result = { winner: 'soldier', text: '士兵胜：AI 主将无路可走！' };
       } else {
-        this.result = { winner: 'player', text: '红方胜：AI 无路可走！' };
+        this.result = { winner: 'red', text: '红方胜：AI 无路可走！' };
       }
       return;
     }
